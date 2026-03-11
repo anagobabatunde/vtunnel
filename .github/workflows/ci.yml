@@ -25,7 +25,20 @@ jobs:
         run: v fmt -verify .
 
       - name: Static analysis
-        run: v vet .
+        run: |
+          v vet src/auth/
+          v vet src/config/
+          v vet src/protocol/
+          v vet src/proxy/
+          v vet src/slog/
+          v vet src/transport/
+          v vet src/tunnel/
+          v vet src/acme/
+          v vet cmd/server/
+          v vet cmd/client/
+          # Note: src/hosted/ and cmd/vtunnel/ use db.sqlite which triggers
+          # a V compiler bug in vet (v.ast.UnknownTypeInfo cast panic).
+          # Vet these when the V compiler fix lands.
 
       - name: Build unified binary
         run: v cmd/vtunnel/ -o vtunnel
