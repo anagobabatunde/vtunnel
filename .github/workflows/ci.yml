@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup V
+        uses: vlang/setup-v@v1.4
+        with:
+          check-latest: true
+
+      - name: Check formatting
+        run: v fmt -verify .
+
+      - name: Static analysis
+        run: v vet .
+
+      - name: Build server
+        run: v cmd/server/ -o vtunnel-server
+
+      - name: Build client
+        run: v cmd/client/ -o vtunnel-client
+
+      - name: Run tests
+        run: v test src/

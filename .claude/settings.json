@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(v build:*)",
+      "Bash(v test:*)",
+      "Bash(v fmt:*)",
+      "Bash(v vet:*)",
+      "Bash(v run:*)",
+      "Bash(v doc:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

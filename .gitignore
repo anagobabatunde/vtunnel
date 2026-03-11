@@ -1,0 +1,42 @@
+# V build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+vtunnel-server
+vtunnel-client
+
+# V cache
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Binaries in root
+/server
+/client
+
+# Build outputs in cmd directories
+cmd/server/server
+cmd/client/client
+
+# Secrets — never commit tokens or keys
+tokens.txt
+*.pem
+*.key
+
+# Claude Code local settings (dev-only)
+.claude/launch.json
+.claude/settings.local.json
+
+# Empty placeholder directories
+tests/
+scripts/
