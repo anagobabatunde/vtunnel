@@ -27,6 +27,9 @@ jobs:
       - name: Static analysis
         run: v vet .
 
+      - name: Build unified binary
+        run: v cmd/vtunnel/ -o vtunnel
+
       - name: Build server
         run: v cmd/server/ -o vtunnel-server
 

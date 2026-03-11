@@ -139,6 +139,32 @@ fn test_valid_port_invalid() {
 	assert valid_port(100000) == false
 }
 
+// --- Command enum ---
+
+fn test_command_enum_values() {
+	assert Command.http != Command.tcp
+	assert Command.server != Command.http
+	assert Command.token != Command.server
+	assert Command.help != Command.token
+}
+
+// --- TokenConfig defaults ---
+
+fn test_token_config_defaults() {
+	cfg := TokenConfig{}
+	assert cfg.action == ''
+	assert cfg.token_file == ''
+}
+
+fn test_token_config_field_assignment() {
+	cfg := TokenConfig{
+		action:     'generate'
+		token_file: '/tmp/tokens.txt'
+	}
+	assert cfg.action == 'generate'
+	assert cfg.token_file == '/tmp/tokens.txt'
+}
+
 // --- Log config fields ---
 
 fn test_server_config_log_fields() {

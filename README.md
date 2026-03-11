@@ -23,17 +23,26 @@ Open-source ngrok alternative — expose local services to the internet. Written
 
 ```bash
 # Build
-v -prod cmd/server/ -o vtunnel-server
-v -prod cmd/client/ -o vtunnel-client
+v -prod cmd/vtunnel/ -o vtunnel
 
+# Expose local port 3000 to the internet
+./vtunnel http 3000
+
+# Expose a TCP service (e.g., PostgreSQL)
+./vtunnel tcp 5432
+```
+
+### Production Setup
+
+```bash
 # Generate an auth token
-./vtunnel-server --generate-token --token-file tokens.txt
+./vtunnel token generate --token-file tokens.txt
 
 # Start the relay server
-./vtunnel-server --port 8080 --http-port 80 --domain example.com --token-file tokens.txt
+./vtunnel server --port 8080 --http-port 80 --domain example.com --token-file tokens.txt
 
 # On your local machine, expose port 3000
-./vtunnel-client --server example.com:8080 --local localhost:3000 --subdomain myapp --token <your-token>
+./vtunnel http 3000 --server example.com:8080 --subdomain myapp --token <your-token>
 
 # Visit http://myapp.example.com to reach your local service
 ```
@@ -51,10 +60,33 @@ Internet Client ──> Public Server (:443/:80) ──> Relay (mux) ──> Con
 
 All traffic is multiplexed over a single connection using a binary framing protocol: `[stream_id: u32][msg_type: u8][length: u32][payload]`.
 
-## Server CLI
+## CLI Reference
+
+### `vtunnel http <port>` — Expose a local HTTP service
 
 ```
-vtunnel-server [options]
+vtunnel http <port> [options]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--server` | `localhost:8080` | Server address (host:port) |
+| `--subdomain` | `myapp` | Subdomain to register |
+| `--token` | | Auth token for server |
+| `--tls` | | Connect using TLS |
+| `--tls-ca` | | CA certificate PEM for server verification |
+| `--ws` | | Connect via WebSocket instead of TCP |
+| `--log-level` | `info` | `debug`, `info`, `warn`, `error` |
+| `--log-format` | `human` | `human`, `json` |
+
+### `vtunnel tcp <port>` — Expose a local TCP service
+
+Same options as `vtunnel http`.
+
+### `vtunnel server` — Start the relay server
+
+```
+vtunnel server [options]
 ```
 
 | Flag | Default | Description |
@@ -75,23 +107,11 @@ vtunnel-server [options]
 | `--log-level` | `info` | `debug`, `info`, `warn`, `error` |
 | `--log-format` | `human` | `human`, `json` |
 
-## Client CLI
+### `vtunnel token generate` — Generate an auth token
 
 ```
-vtunnel-client [options]
+vtunnel token generate --token-file <path>
 ```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--server` | `localhost:8080` | Server address (host:port) |
-| `--local` | `localhost:3000` | Local service address |
-| `--subdomain` | `myapp` | Subdomain to register |
-| `--token` | | Auth token for server |
-| `--tls` | | Connect using TLS |
-| `--tls-ca` | | CA certificate PEM for server verification |
-| `--ws` | | Connect via WebSocket instead of TCP |
-| `--log-level` | `info` | `debug`, `info`, `warn`, `error` |
-| `--log-format` | `human` | `human`, `json` |
 
 ## TLS
 
@@ -99,27 +119,30 @@ Three modes are supported:
 
 **Manual TLS** — bring your own certificates:
 ```bash
-./vtunnel-server --tls-cert cert.pem --tls-key key.pem --port 443 --domain example.com
-./vtunnel-client --server example.com:443 --tls --local localhost:3000
+./vtunnel server --tls-cert cert.pem --tls-key key.pem --port 443 --domain example.com
+./vtunnel http 3000 --server example.com:443 --tls
 ```
 
 **ACME auto-TLS** — automatic Let's Encrypt certificates:
 ```bash
-./vtunnel-server --acme --acme-email you@example.com --domain example.com --port 443 --http-port 80
+./vtunnel server --acme --acme-email you@example.com --domain example.com --port 443 --http-port 80
 ```
 
 **No TLS** — for development only:
 ```bash
-./vtunnel-server --port 8080 --http-port 80
-./vtunnel-client --server localhost:8080 --local localhost:3000
+./vtunnel server --port 8080 --http-port 80
+./vtunnel http 3000 --server localhost:8080
 ```
 
 ## Development
 
 ```bash
-# Build
-v cmd/server/         # Build server
-v cmd/client/         # Build client
+# Build (unified binary)
+v cmd/vtunnel/        # Build unified binary
+
+# Build (standalone)
+v cmd/server/         # Build server only
+v cmd/client/         # Build client only
 
 # Test
 v test src/           # Run all unit tests
@@ -134,22 +157,24 @@ v vet .               # Static analysis
 ```
 vtunnel/
 ├── cmd/
-│   ├── server/           # Relay server entry point
+│   ├── vtunnel/             # Unified CLI entry point
 │   │   └── main.v
-│   └── client/           # Client CLI entry point
+│   ├── server/              # Standalone server binary
+│   │   └── main.v
+│   └── client/              # Standalone client binary
 │       └── main.v
 ├── src/
-│   ├── acme/             # ACME/Let's Encrypt auto-TLS
-│   ├── auth/             # Token-based auth & validation
-│   ├── config/           # CLI flags & config parsing
-│   ├── protocol/         # Wire protocol (framing, serialization)
-│   ├── proxy/            # HTTP proxy & tunnel registry
-│   ├── slog/             # Structured logging
-│   ├── transport/        # TCP, TLS, WebSocket transports
-│   └── tunnel/           # Stream multiplexing
-├── v.mod                 # V module manifest
-├── LICENSE               # MIT
-└── CLAUDE.md             # Claude Code context
+│   ├── acme/                # ACME/Let's Encrypt auto-TLS
+│   ├── auth/                # Token-based auth & validation
+│   ├── config/              # CLI flags & config parsing
+│   ├── protocol/            # Wire protocol (framing, serialization)
+│   ├── proxy/               # HTTP proxy & tunnel registry
+│   ├── slog/                # Structured logging
+│   ├── transport/           # TCP, TLS, WebSocket transports
+│   └── tunnel/              # Stream multiplexing
+├── v.mod                    # V module manifest
+├── LICENSE                  # MIT
+└── CLAUDE.md                # Claude Code context
 ```
 
 ## Contributing

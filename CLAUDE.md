@@ -16,19 +16,23 @@ vtunnel/
 ├── CLAUDE.md              # This file — Claude Code context
 ├── v.mod                  # V module manifest
 ├── cmd/
-│   ├── server/            # Relay server entry point
+│   ├── vtunnel/           # Unified CLI entry point (vtunnel http/tcp/server/token)
 │   │   └── main.v
-│   └── client/            # Client CLI entry point
+│   ├── server/            # Standalone server entry point
+│   │   └── main.v
+│   └── client/            # Standalone client entry point
 │       └── main.v
 ├── src/
 │   ├── acme/              # ACME/Let's Encrypt auto-TLS
-│   ├── auth/              # Token-based auth & handshake
+│   ├── auth/              # Token-based auth & handshake + Authenticator interface
 │   ├── config/            # CLI flags & config parsing
+│   ├── hosted/            # Hosted mode: users, API keys, tiers, usage, mgmt API
 │   ├── protocol/          # Wire protocol (message types, serialization)
 │   ├── proxy/             # HTTP/TCP proxy handlers on server side
 │   ├── slog/              # Structured logging
 │   ├── transport/         # TCP/TLS/WebSocket transport layer
 │   └── tunnel/            # Core tunnel logic (mux, demux, framing)
+├── deploy/                # Deployment configs (systemd, Caddy, deploy script)
 └── .claude/               # Claude Code configuration
     ├── rules/             # Coding rules
     └── commands/          # Slash commands
@@ -54,12 +58,14 @@ Key architectural decisions:
 
 ```bash
 # Build
-v cmd/server/            # Build server binary
-v cmd/client/            # Build client binary
+v cmd/vtunnel/           # Build unified binary
+v cmd/server/            # Build server binary (standalone)
+v cmd/client/            # Build client binary (standalone)
 
-# Run
-./server --port 8080     # Start relay server
-./client --server example.com --local 3000   # Expose local port 3000
+# Run (unified)
+./vtunnel http 3000      # Expose local port 3000
+./vtunnel server --port 8080   # Start relay server
+./vtunnel token generate --token-file tokens.txt   # Generate auth token
 
 # Test
 v test .                 # Run all tests

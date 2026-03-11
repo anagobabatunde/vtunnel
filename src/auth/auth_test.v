@@ -230,3 +230,63 @@ fn test_save_token_creates_file() {
 	tokens := load_tokens(path)!
 	assert tokens[0] == 'newtoken'
 }
+
+// --- FileAuthenticator ---
+
+fn test_file_authenticator_valid() {
+	fa := new_file_authenticator(['abc123', 'def456'])
+	result := fa.validate('abc123')!
+	assert result.user_id == 'self-hosted'
+	assert result.tier == 'self-hosted'
+	assert result.max_tunnels == -1
+	assert result.max_bw_bytes == -1
+}
+
+fn test_file_authenticator_invalid() {
+	fa := new_file_authenticator(['abc123'])
+	if _ := fa.validate('wrong') {
+		assert false, 'invalid token should fail'
+	}
+}
+
+fn test_file_authenticator_empty_list() {
+	fa := new_file_authenticator([]string{})
+	if _ := fa.validate('any') {
+		assert false, 'empty list should reject all'
+	}
+}
+
+// --- NoAuthenticator ---
+
+fn test_no_authenticator_accepts_anything() {
+	na := new_no_authenticator()
+	result := na.validate('anything')!
+	assert result.user_id == 'anonymous'
+	assert result.tier == 'self-hosted'
+	assert result.max_tunnels == -1
+}
+
+fn test_no_authenticator_accepts_empty() {
+	na := new_no_authenticator()
+	result := na.validate('')!
+	assert result.tier == 'self-hosted'
+}
+
+// --- generate_random_subdomain ---
+
+fn test_generate_random_subdomain_format() {
+	sub := generate_random_subdomain()!
+	parts := sub.split('-')
+	assert parts.len == 3, 'should have 3 parts: adj-noun-hex'
+}
+
+fn test_generate_random_subdomain_uniqueness() {
+	s1 := generate_random_subdomain()!
+	s2 := generate_random_subdomain()!
+	assert s1 != s2, 'random subdomains should be unique'
+}
+
+fn test_generate_random_subdomain_valid() {
+	sub := generate_random_subdomain()!
+	validate_subdomain(sub) or { assert false, 'random subdomain should be valid: ${sub}' }
+}

@@ -4,8 +4,11 @@
 *.dylib
 *.dll
 *.exe
-vtunnel-server
-vtunnel-client
+
+# Built binaries (anchored to root so cmd/vtunnel/ source dir is not ignored)
+/vtunnel
+/vtunnel-server
+/vtunnel-client
 
 # V cache
 .cache/
@@ -27,11 +30,17 @@ Thumbs.db
 # Build outputs in cmd directories
 cmd/server/server
 cmd/client/client
+cmd/vtunnel/vtunnel
 
 # Secrets — never commit tokens or keys
 tokens.txt
 *.pem
 *.key
+
+# Database files (hosted mode)
+*.db
+*.db-wal
+*.db-shm
 
 # Claude Code local settings (dev-only)
 .claude/launch.json
