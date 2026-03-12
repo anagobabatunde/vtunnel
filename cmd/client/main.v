@@ -163,6 +163,7 @@ fn create_tunnel(cfg config.ClientConfig, logger &slog.Logger) !&tunnel.Tunnel {
 	}
 
 	mut conn := net.dial_tcp(cfg.server_addr)!
+	transport.set_nodelay(mut conn)
 	mut tcp := transport.new_tcp(conn)
 	tcp.set_read_timeout(tunnel.idle_timeout)
 	return tunnel.new(tcp)
@@ -181,6 +182,8 @@ fn handle_stream(mut tun tunnel.Tunnel, s &tunnel.Stream, local_addr string, log
 		tun.remove_stream(s.id)
 		return
 	}
+
+	transport.set_nodelay(mut local)
 
 	// Bidirectional relay using shared helpers
 	spawn tunnel.pipe_conn_to_stream(mut local, mut tun, s)

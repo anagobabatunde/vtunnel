@@ -13,7 +13,7 @@ pub mut:
 pub fn new_stream(id u32) &Stream {
 	return &Stream{
 		id: id
-		rx: chan []u8{cap: 64}
+		rx: chan []u8{cap: 256}
 	}
 }
 

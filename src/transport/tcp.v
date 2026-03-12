@@ -3,6 +3,8 @@ module transport
 import net
 import time
 
+#include <netinet/tcp.h>
+
 // TcpTransport wraps a net.TcpConn and implements the Transport interface.
 @[heap]
 pub struct TcpTransport {
@@ -15,6 +17,14 @@ pub fn new_tcp(conn net.TcpConn) &TcpTransport {
 	return &TcpTransport{
 		conn: conn
 	}
+}
+
+// set_nodelay disables Nagle's algorithm on a TCP connection for lower latency.
+// Nagle buffers small writes for up to 40ms which destroys tunnel performance.
+// Uses C interop because V's SocketOption enum does not include tcp_nodelay.
+pub fn set_nodelay(mut conn net.TcpConn) {
+	one := int(1)
+	C.setsockopt(conn.sock.handle, C.IPPROTO_TCP, C.TCP_NODELAY, &one, sizeof(int))
 }
 
 // set_read_timeout configures the read timeout on the underlying TCP connection.

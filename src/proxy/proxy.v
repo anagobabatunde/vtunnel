@@ -2,6 +2,7 @@ module proxy
 
 import net
 import src.acme
+import src.transport
 import src.tunnel
 import src.protocol
 
@@ -86,8 +87,11 @@ pub fn (mut p HttpProxy) listen() ! {
 // handle_visitor peeks the Host header, finds the tunnel, and relays.
 // Cleanup is done explicitly in correct order to prevent goroutine leaks.
 fn (mut p HttpProxy) handle_visitor(mut conn net.TcpConn) {
+	// Disable Nagle's algorithm for low-latency relay
+	transport.set_nodelay(mut conn)
+
 	// Peek the first chunk to extract Host header
-	mut peek := []u8{len: 4096}
+	mut peek := []u8{len: 8192}
 	n := conn.read(mut peek) or {
 		conn.close() or {}
 		return

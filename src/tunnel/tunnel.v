@@ -34,7 +34,7 @@ pub fn new(t transport.Transport) &Tunnel {
 	id_ch <- u32(1)
 	return &Tunnel{
 		transport:  t
-		write_ch:   chan []u8{cap: 128}
+		write_ch:   chan []u8{cap: 512}
 		id_counter: id_ch
 	}
 }
@@ -183,7 +183,7 @@ pub fn (mut tun Tunnel) close() {
 // pipe_conn_to_stream reads from a TCP connection and sends Data frames.
 // Used for local connections (visitor <-> local service), not the tunnel transport.
 pub fn pipe_conn_to_stream(mut conn net.TcpConn, mut tun Tunnel, s &Stream) {
-	mut buf := []u8{len: 32768}
+	mut buf := []u8{len: 65536}
 	for {
 		n := conn.read(mut buf) or { break }
 		if n == 0 {
