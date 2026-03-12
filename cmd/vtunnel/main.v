@@ -23,6 +23,7 @@ fn main() {
 		.http, .tcp { run_client() }
 		.server { run_server() }
 		.token { run_token() }
+		.auth { run_auth() }
 		.help { config.print_usage() }
 	}
 }
@@ -131,8 +132,18 @@ fn connect_and_run(cfg config.ClientConfig, logger &slog.Logger) ! {
 		return error('unexpected response: expected reg_ok, got ${reg_resp.msg_type}')
 	}
 
+	assigned := reg_resp.payload.bytestr()
+
+	// Extract the base domain from the server address for display
+	server_host := cfg.server_addr.split(':')[0]
+	tunnel_url := '${assigned}.${server_host}'
+
+	println('')
+	println('  tunnel ready: https://${tunnel_url}')
+	println('  forwarding:   https://${tunnel_url} -> ${cfg.local_addr}')
+	println('')
 	logger.info('connected to ${cfg.server_addr}')
-	logger.info('forwarding ${cfg.subdomain} -> ${cfg.local_addr}')
+	logger.info('forwarding ${assigned} -> ${cfg.local_addr}')
 
 	spawn tun.run_write_loop()
 	spawn tun.run_ping_loop()
@@ -412,25 +423,52 @@ fn handle_control(mut tun tunnel.Tunnel, mut registry proxy.Registry, authentica
 }
 
 // register_subdomain handles the subdomain registration frame and starts the tunnel.
+// If the client sends an empty subdomain, the server auto-assigns a random one.
 fn register_subdomain(mut tun tunnel.Tunnel, mut registry proxy.Registry, f protocol.Frame, ctrl &slog.Logger) {
 	if f.msg_type != .data_open {
 		ctrl.error('expected data_open', detail: '${f.msg_type}')
 		return
 	}
-	subdomain := f.payload.bytestr()
+	requested := f.payload.bytestr()
 
-	auth.validate_subdomain(subdomain) or {
-		err_frame := protocol.new_frame(0, .err, 'invalid subdomain: ${err}'.bytes())
-		tun.write_raw(err_frame.encode()) or {}
-		ctrl.error('invalid subdomain', err: '${err}', subdomain: subdomain)
-		return
-	}
-
-	if registry.is_registered(subdomain) {
-		err_frame := protocol.new_frame(0, .err, 'subdomain already in use: ${subdomain}'.bytes())
-		tun.write_raw(err_frame.encode()) or {}
-		ctrl.warn('subdomain collision', subdomain: subdomain)
-		return
+	// Auto-assign a random subdomain if client didn't request one
+	mut subdomain := requested
+	if subdomain == '' {
+		for attempt in 0 .. 5 {
+			candidate := auth.generate_random_subdomain() or {
+				ctrl.error('failed to generate subdomain', err: '${err}')
+				return
+			}
+			if !registry.is_registered(candidate) {
+				subdomain = candidate
+				break
+			}
+			ctrl.warn('auto-assign collision, retrying',
+				subdomain: candidate
+				detail:    'attempt ${attempt + 1}/5'
+			)
+		}
+		if subdomain == '' {
+			err_frame := protocol.new_frame(0, .err, 'failed to auto-assign subdomain'.bytes())
+			tun.write_raw(err_frame.encode()) or {}
+			ctrl.error('all auto-assign attempts failed')
+			return
+		}
+		ctrl.info('auto-assigned subdomain', subdomain: subdomain)
+	} else {
+		// Validate client-requested subdomain
+		auth.validate_subdomain(subdomain) or {
+			err_frame := protocol.new_frame(0, .err, 'invalid subdomain: ${err}'.bytes())
+			tun.write_raw(err_frame.encode()) or {}
+			ctrl.error('invalid subdomain', err: '${err}', subdomain: subdomain)
+			return
+		}
+		if registry.is_registered(subdomain) {
+			err_frame := protocol.new_frame(0, .err, 'subdomain already in use: ${subdomain}'.bytes())
+			tun.write_raw(err_frame.encode()) or {}
+			ctrl.warn('subdomain collision', subdomain: subdomain)
+			return
+		}
 	}
 
 	registry.register(subdomain, tun)
@@ -568,4 +606,55 @@ fn run_token_generate(token_file string) {
 	}
 	println('generated token: ${token}')
 	println('saved to: ${token_file}')
+}
+
+// --- Auth ---
+
+// run_auth handles the "vtunnel auth <token>" subcommand.
+// Saves the API key and server address to ~/.vtunnel/config.json.
+fn run_auth() {
+	args := os.args[2..] // skip binary name and "auth"
+	if args.len == 0 || args[0].starts_with('-') {
+		println('vtunnel auth — save your API key for the hosted service
+
+Usage:
+  vtunnel auth <api-key> [--server <host:port>]
+
+Examples:
+  vtunnel auth vtk_abc123def456...
+  vtunnel auth vtk_abc123... --server my-server.com:8080
+
+This saves your credentials to ~/.vtunnel/config.json so you can
+simply run "vtunnel http 3000" without any extra flags.')
+		return
+	}
+
+	token := args[0]
+	mut server := config.default_server
+
+	// Parse optional --server flag
+	mut i := 1
+	for i < args.len {
+		if args[i] == '--server' && i + 1 < args.len {
+			server = args[i + 1]
+			i += 2
+		} else {
+			i++
+		}
+	}
+
+	config.save_config(server, token) or {
+		eprintln('failed to save config: ${err}')
+		exit(1)
+	}
+
+	println('Authenticated successfully!')
+	println('')
+	println('  Server: ${server}')
+	redacted := auth.redact_token(token)
+	println('  Token:  ${redacted}')
+	println('  Saved:  ${config.config_dir()}/config.json')
+	println('')
+	println('You can now run:')
+	println('  vtunnel http 3000')
 }

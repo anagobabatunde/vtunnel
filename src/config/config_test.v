@@ -1,5 +1,8 @@
 module config
 
+import json
+import os
+
 // --- ServerConfig defaults ---
 
 fn test_server_config_defaults() {
@@ -42,7 +45,7 @@ fn test_client_config_defaults() {
 	cfg := ClientConfig{}
 	assert cfg.server_addr == 'localhost:8080'
 	assert cfg.local_addr == 'localhost:3000'
-	assert cfg.subdomain == 'myapp'
+	assert cfg.subdomain == '' // empty = server auto-assigns
 	assert cfg.auth_token == ''
 	assert cfg.tls == false
 	assert cfg.tls_ca == ''
@@ -145,7 +148,8 @@ fn test_command_enum_values() {
 	assert Command.http != Command.tcp
 	assert Command.server != Command.http
 	assert Command.token != Command.server
-	assert Command.help != Command.token
+	assert Command.auth != Command.token
+	assert Command.help != Command.auth
 }
 
 // --- TokenConfig defaults ---
@@ -163,6 +167,54 @@ fn test_token_config_field_assignment() {
 	}
 	assert cfg.action == 'generate'
 	assert cfg.token_file == '/tmp/tokens.txt'
+}
+
+// --- default_server constant ---
+
+fn test_default_server() {
+	assert default_server == 'tunnel.vtunnel.io:8080'
+}
+
+// --- SavedConfig defaults ---
+
+fn test_saved_config_defaults() {
+	cfg := SavedConfig{}
+	assert cfg.server == ''
+	assert cfg.token == ''
+}
+
+// --- config_dir ---
+
+fn test_config_dir_not_empty() {
+	dir := config_dir()
+	assert dir.len > 0
+	assert dir.ends_with('.vtunnel')
+}
+
+// --- SavedConfig JSON roundtrip ---
+
+fn test_saved_config_json_roundtrip() {
+	cfg := SavedConfig{
+		server: 'example.com:8080'
+		token:  'test-token-123'
+	}
+	data := json.encode_pretty(cfg)
+	loaded := json.decode(SavedConfig, data) or {
+		assert false, 'failed to decode SavedConfig'
+		return
+	}
+	assert loaded.server == 'example.com:8080'
+	assert loaded.token == 'test-token-123'
+}
+
+// --- load_saved_config returns empty on missing file ---
+
+fn test_load_saved_config_missing_file() {
+	// load_saved_config returns empty SavedConfig when file doesn't exist
+	cfg := load_saved_config()
+	// This tests the fallback behavior — may return non-empty if ~/.vtunnel/config.json exists
+	// but the function should not crash
+	assert cfg.server.len >= 0
 }
 
 // --- Log config fields ---

@@ -1,45 +1,30 @@
-# VTunnel Caddy Reverse Proxy
+# VTunnel Caddy Reverse Proxy — tunnel.vtunnel.io
 #
 # Caddy handles TLS termination (including wildcard certs via DNS-01)
-# and forwards traffic to vtunnel running on localhost.
+# and forwards visitor traffic to vtunnel's HTTP proxy on localhost.
 #
-# DNS provider: uncomment and configure one of the supported providers
-# See: https://caddyserver.com/docs/automatic-https#dns-challenge
+# Tunnel clients connect directly to vtunnel on :8080 (not through Caddy).
 #
 # Prerequisites:
-#   1. Set DNS A records:
-#      tunnel.example.com    -> VPS_IP
-#      *.tunnel.example.com  -> VPS_IP
-#   2. Install caddy with DNS provider plugin (e.g., caddy-dns/cloudflare)
-#   3. Set environment variables for DNS provider API credentials
+#   1. DNS A records (Cloudflare, DNS-only / grey cloud):
+#      tunnel.vtunnel.io    -> VPS_IP
+#      *.tunnel.vtunnel.io  -> VPS_IP
+#   2. Install caddy with cloudflare DNS plugin:
+#      xcaddy build --with github.com/caddy-dns/cloudflare
+#   3. Set CF_API_TOKEN in Caddy's systemd environment
 
 # Wildcard subdomain routing (visitor traffic)
-*.tunnel.example.com {
+*.tunnel.vtunnel.io {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
     reverse_proxy localhost:8081
 }
 
-# Base domain (for direct access / health checks)
-tunnel.example.com {
+# Base domain (health checks / landing page)
+tunnel.vtunnel.io {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
     reverse_proxy localhost:8081
-}
-
-# Control port (tunnel client connections)
-# Clients connect here to establish tunnels
-:443 {
-    tls {
-        dns cloudflare {env.CF_API_TOKEN}
-    }
-    reverse_proxy localhost:8080
-}
-
-# Management API (internal only - restrict access)
-:9443 {
-    tls internal
-    reverse_proxy localhost:9090
 }

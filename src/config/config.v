@@ -1,5 +1,6 @@
 module config
 
+import json
 import os
 
 // Command represents the top-level CLI subcommand.
@@ -8,6 +9,7 @@ pub enum Command {
 	tcp
 	server
 	token
+	auth
 	help
 }
 
@@ -22,9 +24,50 @@ pub fn parse_command() Command {
 		'tcp' { .tcp }
 		'server' { .server }
 		'token' { .token }
+		'auth' { .auth }
 		'help', '--help', '-h' { .help }
 		else { .help }
 	}
+}
+
+// default_server is the hosted vtunnel.io relay server address.
+pub const default_server = 'tunnel.vtunnel.io:8080'
+
+// config_dir returns the vtunnel config directory (~/.vtunnel).
+pub fn config_dir() string {
+	return os.join_path(os.home_dir(), '.vtunnel')
+}
+
+// config_path returns the path to the vtunnel config file.
+fn config_path() string {
+	return os.join_path(config_dir(), 'config.json')
+}
+
+// SavedConfig holds persistent client configuration saved to disk.
+struct SavedConfig {
+	server string @[json: 'server']
+	token  string @[json: 'token']
+}
+
+// load_saved_config reads the saved config file, if it exists.
+pub fn load_saved_config() SavedConfig {
+	path := config_path()
+	content := os.read_file(path) or { return SavedConfig{} }
+	return json.decode(SavedConfig, content) or { return SavedConfig{} }
+}
+
+// save_config writes the config to ~/.vtunnel/config.json.
+pub fn save_config(server string, token string) ! {
+	dir := config_dir()
+	if !os.exists(dir) {
+		os.mkdir_all(dir)!
+	}
+	cfg := SavedConfig{
+		server: server
+		token:  token
+	}
+	data := json.encode_pretty(cfg)
+	os.write_file(config_path(), data)!
 }
 
 // print_usage prints the top-level help message.
@@ -35,7 +78,13 @@ Usage:
   vtunnel http <port> [options]     expose a local HTTP service
   vtunnel tcp <port> [options]      expose a local TCP port
   vtunnel server [options]          start the relay server
-  vtunnel token generate [options]  generate an auth token
+  vtunnel auth <token>              save API key for hosted service
+  vtunnel token generate [options]  generate an auth token (self-hosted)
+
+Examples:
+  vtunnel auth vtk_abc123...        save your API key (one-time setup)
+  vtunnel http 3000                 expose port 3000 (auto-assigns URL)
+  vtunnel http 3000 --subdomain app expose as app.tunnel.vtunnel.io
 
 Run 'vtunnel <command> --help' for command-specific help.")
 }
@@ -115,7 +164,7 @@ pub struct ClientConfig {
 pub mut:
 	server_addr string = 'localhost:8080'
 	local_addr  string = 'localhost:3000'
-	subdomain   string = 'myapp'
+	subdomain   string // empty = server auto-assigns a random subdomain
 	auth_token  string
 	tls         bool   // connect to server using TLS
 	tls_ca      string // path to CA certificate PEM for server verification
@@ -166,13 +215,14 @@ Usage:
   vtunnel ${mode} <port> [options]
 
 Examples:
-  vtunnel ${mode} 3000
-  vtunnel ${mode} 8080 --server relay.example.com:8080 --token mytoken
+  vtunnel ${mode} 3000                                    auto-assign URL
+  vtunnel ${mode} 3000 --subdomain myapp                  custom subdomain
+  vtunnel ${mode} 3000 --server my-server.com:8080        self-hosted server
 
 Options:
-  --server <host:port>  server address (default: localhost:8080)
-  --subdomain <name>    subdomain to register (default: myapp)
-  --token <token>       auth token for server
+  --server <host:port>  server address (default: saved config or tunnel.vtunnel.io:8080)
+  --subdomain <name>    subdomain to register (auto-assigned if omitted)
+  --token <token>       auth token (default: saved from vtunnel auth)
   --tls                 connect using TLS
   --tls-ca <path>       CA certificate PEM for server verification
   --ws                  connect via WebSocket instead of raw TCP
@@ -365,9 +415,17 @@ pub fn parse_server_args() ServerConfig {
 
 // parse_client_args reads os.args into a ClientConfig.
 // Supports positional port: "vtunnel http 3000 [--flags]"
-// The mode parameter ("http" or "tcp") is used for help text.
+// Loads saved config from ~/.vtunnel/config.json as defaults.
 pub fn parse_client_args() ClientConfig {
+	// Load saved config as defaults
+	saved := load_saved_config()
 	mut cfg := ClientConfig{}
+	if saved.server.len > 0 {
+		cfg.server_addr = saved.server
+	}
+	if saved.token.len > 0 {
+		cfg.auth_token = saved.token
+	}
 	raw_args := os.args[1..]
 	// Determine the mode word for help text
 	mode := if raw_args.len > 0 && (raw_args[0] == 'http' || raw_args[0] == 'tcp') {

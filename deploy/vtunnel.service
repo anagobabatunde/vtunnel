@@ -10,11 +10,10 @@ ExecStart=/usr/local/bin/vtunnel server \
     --mode hosted \
     --port 8080 \
     --http-port 8081 \
-    --domain tunnel.example.com \
+    --domain tunnel.vtunnel.io \
     --db-path /var/lib/vtunnel/vtunnel.db \
     --api-port 9090 \
     --api-key CHANGE_ME_TO_A_RANDOM_SECRET \
-    --token-file /etc/vtunnel/tokens.txt \
     --log-level info \
     --log-format json
 WorkingDirectory=/var/lib/vtunnel

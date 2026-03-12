@@ -229,22 +229,46 @@ fn handle_control(mut tun tunnel.Tunnel, mut registry proxy.Registry, tokens []s
 		ctrl.error('expected data_open', detail: '${f.msg_type}')
 		return
 	}
-	subdomain := f.payload.bytestr()
+	requested := f.payload.bytestr()
 
-	// Validate subdomain format
-	auth.validate_subdomain(subdomain) or {
-		err_frame := protocol.new_frame(0, .err, 'invalid subdomain: ${err}'.bytes())
-		tun.write_raw(err_frame.encode()) or {}
-		ctrl.error('invalid subdomain', err: '${err}', subdomain: subdomain)
-		return
-	}
-
-	// Reject collision — subdomain already taken
-	if registry.is_registered(subdomain) {
-		err_frame := protocol.new_frame(0, .err, 'subdomain already in use: ${subdomain}'.bytes())
-		tun.write_raw(err_frame.encode()) or {}
-		ctrl.warn('subdomain collision', subdomain: subdomain)
-		return
+	// Auto-assign a random subdomain if client didn't request one
+	mut subdomain := requested
+	if subdomain == '' {
+		for attempt in 0 .. 5 {
+			candidate := auth.generate_random_subdomain() or {
+				ctrl.error('failed to generate subdomain', err: '${err}')
+				return
+			}
+			if !registry.is_registered(candidate) {
+				subdomain = candidate
+				break
+			}
+			ctrl.warn('auto-assign collision, retrying',
+				subdomain: candidate
+				detail:    'attempt ${attempt + 1}/5'
+			)
+		}
+		if subdomain == '' {
+			err_frame := protocol.new_frame(0, .err, 'failed to auto-assign subdomain'.bytes())
+			tun.write_raw(err_frame.encode()) or {}
+			ctrl.error('all auto-assign attempts failed')
+			return
+		}
+		ctrl.info('auto-assigned subdomain', subdomain: subdomain)
+	} else {
+		// Validate client-requested subdomain
+		auth.validate_subdomain(subdomain) or {
+			err_frame := protocol.new_frame(0, .err, 'invalid subdomain: ${err}'.bytes())
+			tun.write_raw(err_frame.encode()) or {}
+			ctrl.error('invalid subdomain', err: '${err}', subdomain: subdomain)
+			return
+		}
+		if registry.is_registered(subdomain) {
+			err_frame := protocol.new_frame(0, .err, 'subdomain already in use: ${subdomain}'.bytes())
+			tun.write_raw(err_frame.encode()) or {}
+			ctrl.warn('subdomain collision', subdomain: subdomain)
+			return
+		}
 	}
 
 	registry.register(subdomain, tun)

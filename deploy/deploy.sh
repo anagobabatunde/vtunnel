@@ -8,6 +8,7 @@
 #   - V compiler installed locally
 #   - SSH access to the VPS
 #   - VPS running Ubuntu/Debian with systemd
+#   - Caddy already installed (see deploy/setup-vps.sh)
 
 set -euo pipefail
 
@@ -21,6 +22,7 @@ TARGET="$1"
 BINARY="vtunnel"
 REMOTE_BIN="/usr/local/bin/${BINARY}"
 REMOTE_SERVICE="/etc/systemd/system/vtunnel.service"
+REMOTE_CADDYFILE="/etc/caddy/Caddyfile"
 
 echo "==> Building vtunnel (linux/amd64)..."
 v -prod -os linux cmd/vtunnel/ -o "${BINARY}"
@@ -30,6 +32,9 @@ scp "${BINARY}" "${TARGET}:${REMOTE_BIN}"
 
 echo "==> Uploading systemd service..."
 scp deploy/vtunnel.service "${TARGET}:${REMOTE_SERVICE}"
+
+echo "==> Uploading Caddyfile..."
+scp deploy/Caddyfile "${TARGET}:${REMOTE_CADDYFILE}"
 
 echo "==> Setting up on remote..."
 ssh "${TARGET}" bash <<'EOF'
@@ -43,24 +48,32 @@ ssh "${TARGET}" bash <<'EOF'
     # Make binary executable
     chmod +x /usr/local/bin/vtunnel
 
-    # Reload and restart service
+    # Reload and restart vtunnel
     systemctl daemon-reload
     systemctl enable vtunnel
     systemctl restart vtunnel
 
+    # Reload Caddy config
+    systemctl reload caddy 2>/dev/null || systemctl restart caddy 2>/dev/null || true
+
+    echo ""
     echo "==> vtunnel service status:"
     systemctl status vtunnel --no-pager || true
+    echo ""
+    echo "==> caddy service status:"
+    systemctl status caddy --no-pager || true
 EOF
 
+echo ""
 echo "==> Deployed successfully!"
 echo ""
-echo "Next steps:"
-echo "  1. Edit /etc/systemd/system/vtunnel.service on the VPS"
-echo "     - Set --domain to your real domain"
-echo "     - Set --api-key to a random secret"
-echo "  2. Set up DNS: A record for *.tunnel.yourdomain.com -> VPS IP"
-echo "  3. Install and configure Caddy for TLS (see deploy/Caddyfile)"
-echo "  4. systemctl restart vtunnel"
+echo "Post-deploy checklist:"
+echo "  1. Generate API key:  openssl rand -hex 16"
+echo "  2. Update --api-key in /etc/systemd/system/vtunnel.service"
+echo "  3. Set CF_API_TOKEN in /etc/systemd/system/caddy.service.d/override.conf"
+echo "  4. Verify DNS: dig tunnel.vtunnel.io / dig *.tunnel.vtunnel.io"
+echo "  5. systemctl restart vtunnel && systemctl restart caddy"
+echo "  6. Test: vtunnel http 3000 --server tunnel.vtunnel.io:8080"
 
 # Cleanup local binary
 rm -f "${BINARY}"
