@@ -31,6 +31,7 @@ pub:
 }
 
 // new_frame constructs a Frame with the given fields.
+@[inline]
 pub fn new_frame(stream_id u32, msg_type MsgType, payload []u8) Frame {
 	return Frame{
 		stream_id: stream_id
@@ -41,20 +42,22 @@ pub fn new_frame(stream_id u32, msg_type MsgType, payload []u8) Frame {
 
 // encode serializes a Frame into a byte slice for transmission.
 // Layout: [stream_id u32 BE][msg_type u8][length u32 BE][payload...]
+@[inline]
 pub fn (f Frame) encode() []u8 {
 	payload_len := u32(f.payload.len)
 	mut buf := []u8{len: header_size + f.payload.len}
 	binary.big_endian_put_u32(mut buf, f.stream_id)
 	buf[4] = u8(f.msg_type)
 	binary.big_endian_put_u32_at(mut buf, payload_len, 5)
-	for i, b in f.payload {
-		buf[header_size + i] = b
+	if f.payload.len > 0 {
+		unsafe { vmemcpy(&u8(buf.data) + header_size, f.payload.data, f.payload.len) }
 	}
 	return buf
 }
 
 // parse_msg_type validates and converts a raw byte to a MsgType.
 // Returns an error if the byte is not a known message type.
+@[inline]
 fn parse_msg_type(b u8) !MsgType {
 	if b < u8(MsgType.data_open) || b > u8(MsgType.reg_ok) {
 		return error('unknown msg_type: 0x${b:02x}')
@@ -82,6 +85,7 @@ pub fn decode(raw []u8) !Frame {
 }
 
 // read_exact reads exactly n bytes from reader into buf.
+@[direct_array_access]
 fn read_exact(mut reader io.Reader, mut buf []u8) ! {
 	mut total := 0
 	for total < buf.len {

@@ -176,6 +176,7 @@ fn main() {
 		for {
 			mut conn := listener.accept() or { continue }
 			transport.set_nodelay(mut conn)
+			transport.tune_socket(mut conn)
 			mut tcp := transport.new_tcp(conn)
 			tcp.set_read_timeout(tunnel.idle_timeout)
 			mut tun := tunnel.new(tcp)

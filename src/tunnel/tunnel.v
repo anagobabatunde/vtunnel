@@ -89,6 +89,7 @@ pub fn (mut tun Tunnel) remove_stream(id u32) {
 
 // send encodes a frame and queues it for writing.
 // Safe to call after tunnel is closed — silently drops the frame.
+@[inline]
 pub fn (mut tun Tunnel) send(f protocol.Frame) {
 	data := f.encode()
 	tun.write_ch.try_push(&data)
@@ -122,9 +123,11 @@ pub fn (mut tun Tunnel) run_ping_loop() {
 
 // run_read_loop reads frames from the transport and dispatches to streams.
 // Calls on_open when a DataOpen frame arrives.
+// Uses io.BufferedReader (128 KB) to batch syscalls — one kernel read serves many frames.
 pub fn (mut tun Tunnel) run_read_loop(on_open fn (u32, []u8)) {
 	mut rdr := transport.new_reader(tun.transport)
-	mut reader := io.Reader(rdr)
+	mut br := io.new_buffered_reader(reader: rdr, cap: 131072)
+	mut reader := io.Reader(br)
 	for {
 		f := protocol.read_frame(mut reader) or { break }
 		match f.msg_type {
@@ -163,7 +166,8 @@ pub fn (mut tun Tunnel) run_read_loop(on_open fn (u32, []u8)) {
 // Used during handshake (auth, registration) before the read loop starts.
 pub fn (mut tun Tunnel) read_frame() !protocol.Frame {
 	mut rdr := transport.new_reader(tun.transport)
-	mut reader := io.Reader(rdr)
+	mut br := io.new_buffered_reader(reader: rdr, cap: 131072)
+	mut reader := io.Reader(br)
 	return protocol.read_frame(mut reader)
 }
 

@@ -164,6 +164,7 @@ fn create_tunnel(cfg config.ClientConfig, logger &slog.Logger) !&tunnel.Tunnel {
 
 	mut conn := net.dial_tcp(cfg.server_addr)!
 	transport.set_nodelay(mut conn)
+	transport.tune_socket(mut conn)
 	mut tcp := transport.new_tcp(conn)
 	tcp.set_read_timeout(tunnel.idle_timeout)
 	return tunnel.new(tcp)
